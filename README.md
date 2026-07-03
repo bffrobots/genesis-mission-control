@@ -178,3 +178,54 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 **Built with ❤️ by BFF Robots** | [www.bffrobots.com](https://www.bffrobots.com)
+
+## AI Agent Integrations
+
+Genesis Mission Control supports integration with multiple AI platforms:
+
+| Platform | Status | Documentation |
+|----------|--------|---------------|
+| **Hermes Agent** | ✅ Native | [docs/AGENTIC-INTEGRATION.md](docs/AGENTIC-INTEGRATION.md) |
+| **LangChain** | ✅ Tools | [docs/AGENTIC-INTEGRATION.md](docs/AGENTIC-INTEGRATION.md) |
+| **AutoGen** | ✅ Ready | [docs/AGENTIC-INTEGRATION.md](docs/AGENTIC-INTEGRATION.md) |
+| **CrewAI** | ✅ Ready | [docs/AGENTIC-INTEGRATION.md](docs/AGENTIC-INTEGRATION.md) |
+| **OpenClaw** | ✅ Bridge | [docs/OPENCLAW-INTEGRATION.md](docs/OPENCLAW-INTEGRATION.md) |
+| **Claude Code** | ✅ CLI | [docs/CLAUDE-CODE-INTEGRATION.md](docs/CLAUDE-CODE-INTEGRATION.md) |
+
+## 🤖 Synthiam ARC App
+
+**Download the official ARC App:** [Genesis Mission Control on Synthiam](https://synthiam.com/Community/Apps/Genesis_Mission_Control-23372)
+
+### Quick Setup with ARC App
+
+1. **Download App:**
+   - Go to: https://synthiam.com/Community/Apps/Genesis_Mission_Control-23372
+   - Click "Download App"
+   - Open in ARC (double-click the `.ezb` file)
+
+2. **App Includes:**
+   - ✅ HTTP Server Custom (port 8080)
+   - ✅ Live Stream Broadcast (port 8097)
+   - ✅ Auto Position (servo control)
+   - ✅ Camera Device configuration
+   - ✅ Pre-configured scripts for Genesis
+
+3. **Deploy Web Interface:**
+   ```bash
+   cp web/index.html "/mnt/c/Users/YOUR_USERNAME/Documents/ARC/HTTP Server Root/index.html"
+   ```
+
+4. **Start Backends:**
+   ```cmd
+   # Windows
+   scripts\start_genesis.bat
+   
+   # WSL
+   ./scripts/start_genesis.sh
+   ```
+
+5. **Access:** http://localhost:8080
+
+**Note:** The ARC App handles all ARC-side configuration automatically. You only need to run the Python backends and deploy the web interface.
+
+---
