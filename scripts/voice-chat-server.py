@@ -7,6 +7,7 @@ Runs on Windows OR WSL - auto-detects platform
 Integrates with ARC (8080) and Servo Backend (5000)
 WORKS WITHOUT OLLAMA - Falls back to rule-based commands
 OPTIMIZED FOR TABLET - Longer timeouts, better error handling
+FIXED: Proper Ollama API endpoint and model detection
 """
 
 import os
@@ -32,37 +33,47 @@ else:
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434')
 GENESIS_PORT = int(os.environ.get('VOICE_CHAT_PORT', 5001))
 GENESIS_HOST = os.environ.get('VOICE_CHAT_HOST', '0.0.0.0')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.1')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2')  # Changed to llama3.2 (newer)
 ROBOT_NAME = os.environ.get('ROBOT_NAME', 'Genesis')
 ROBOT_ID = os.environ.get('ROBOT_ID', 'mini-bff-genesis')
 ARC_HTTP_URL = os.environ.get('ARC_HTTP_URL', 'http://localhost:8080')
 SERVO_BACKEND_URL = os.environ.get('SERVO_BACKEND_URL', 'http://localhost:5000')
 
 # TIMEOUT SETTINGS - Increased for tablet performance
-OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '120'))  # 120 seconds (was 30)
+OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '120'))  # 120 seconds
 OLLAMA_CONNECT_TIMEOUT = int(os.environ.get('OLLAMA_CONNECT_TIMEOUT', '10'))  # 10 seconds
-REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '30'))  # 30 seconds for other requests
+REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '30'))  # 30 seconds
 
 print(f"⏱️  Ollama Timeout: {OLLAMA_TIMEOUT}s (connect: {OLLAMA_CONNECT_TIMEOUT}s)")
 print(f"⏱️  Request Timeout: {REQUEST_TIMEOUT}s")
 
-# Check if Ollama is available
+# Check if Ollama is available and get available models
 OLLAMA_AVAILABLE = False
 OLLAMA_MODEL_LOADED = None
+AVAILABLE_MODELS = []
 
 try:
     print(f"🔍 Checking Ollama at {OLLAMA_URL}...")
     response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=OLLAMA_CONNECT_TIMEOUT)
     if response.status_code == 200:
         OLLAMA_AVAILABLE = True
-        models = response.json().get('models', [])
-        if models:
-            OLLAMA_MODEL_LOADED = models[0].get('name', 'unknown')
-            print(f"✅ Ollama detected: {OLLAMA_URL}")
-            print(f"📦 Model loaded: {OLLAMA_MODEL_LOADED}")
+        models_data = response.json().get('models', [])
+        AVAILABLE_MODELS = [m.get('name', '') for m in models_data]
+        
+        if AVAILABLE_MODELS:
+            # Use first available model if configured model not found
+            if OLLAMA_MODEL in AVAILABLE_MODELS:
+                OLLAMA_MODEL_LOADED = OLLAMA_MODEL
+                print(f"✅ Ollama detected: {OLLAMA_URL}")
+                print(f"📦 Using model: {OLLAMA_MODEL_LOADED}")
+            else:
+                OLLAMA_MODEL_LOADED = AVAILABLE_MODELS[0]
+                print(f"⚠️  Model '{OLLAMA_MODEL}' not found")
+                print(f"   Available models: {', '.join(AVAILABLE_MODELS)}")
+                print(f"   Using: {OLLAMA_MODEL_LOADED}")
         else:
             print(f"⚠️  Ollama running but no models installed")
-            print(f"   Run: ollama pull llama3.1")
+            print(f"   Run: ollama pull llama3.2")
     else:
         print(f"⚠️  Ollama returned status {response.status_code}")
 except requests.exceptions.ConnectionError:
@@ -252,18 +263,22 @@ class GenesisAI:
         }
     
     async def ollama_chat(self, message: str) -> str:
-        """Get response from Ollama LLM (only if available) - OPTIMIZED FOR TABLET"""
+        """Get response from Ollama LLM (only if available) - FIXED API CALL"""
         if not OLLAMA_AVAILABLE:
             return "Ollama not available. Using rule-based mode."
         
+        if not OLLAMA_MODEL_LOADED:
+            return "No Ollama model loaded. Run: ollama pull llama3.2"
+        
         try:
-            print(f"🧠 Sending to Ollama: '{message[:50]}...'")
+            print(f"🧠 Sending to Ollama (model: {OLLAMA_MODEL_LOADED}): '{message[:50]}...'")
             start_time = time.time()
             
+            # FIXED: Use correct Ollama API endpoint
             response = requests.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={
-                    'model': OLLAMA_MODEL,
+                    'model': OLLAMA_MODEL_LOADED,  # Use detected model name
                     'prompt': f"You are {ROBOT_NAME}, a friendly humanoid robot. Keep responses short (1-2 sentences). User said: {message}",
                     'stream': False,
                     'options': {
@@ -272,17 +287,23 @@ class GenesisAI:
                         'num_predict': 100,  # Limit response length for speed
                     }
                 },
-                timeout=OLLAMA_TIMEOUT  # Use increased timeout
+                timeout=OLLAMA_TIMEOUT
             )
             
+            # Check for 404 error specifically
+            if response.status_code == 404:
+                print(f"❌ Ollama 404 error - model '{OLLAMA_MODEL_LOADED}' not found")
+                print(f"   Available models: {AVAILABLE_MODELS}")
+                return f"Model '{OLLAMA_MODEL_LOADED}' not found. Available: {', '.join(AVAILABLE_MODELS)}"
+            
             elapsed = time.time() - start_time
-            print(f"✅ Ollama response in {elapsed:.1f}s")
+            print(f"✅ Ollama response in {elapsed:.1f}s (status: {response.status_code})")
             
             if response.status_code == 200:
                 result = response.json()
                 return result.get('response', '...')
             else:
-                return f"Ollama error: {response.status_code}"
+                return f"Ollama error: {response.status_code} - {response.text[:100]}"
                 
         except requests.exceptions.Timeout:
             print(f"⏱️  Ollama timeout after {OLLAMA_TIMEOUT}s")
@@ -316,7 +337,7 @@ class GenesisAI:
                 )
         
         # For conversation, try LLM if available, otherwise use fallback
-        if OLLAMA_AVAILABLE:
+        if OLLAMA_AVAILABLE and OLLAMA_MODEL_LOADED:
             llm_response = await self.ollama_chat(message)
         else:
             llm_response = command_result['response']  # Use rule-based fallback
@@ -343,6 +364,7 @@ def root():
         'robot': ROBOT_NAME,
         'ollama_available': OLLAMA_AVAILABLE,
         'ollama_model': OLLAMA_MODEL_LOADED,
+        'available_models': AVAILABLE_MODELS,
         'timeouts': {
             'ollama': OLLAMA_TIMEOUT,
             'connect': OLLAMA_CONNECT_TIMEOUT,
@@ -374,11 +396,12 @@ def get_status():
         pass
     
     return JSONResponse(content={
-        'status': 'ok',
+        'status': 'ok' if OLLAMA_AVAILABLE else 'limited',
         'robot': ROBOT_ID,
         'robot_name': ROBOT_NAME,
         'ollama_available': OLLAMA_AVAILABLE,
         'ollama_model': OLLAMA_MODEL_LOADED,
+        'available_models': AVAILABLE_MODELS,
         'connections': {
             'arc': {
                 'available': arc_available,
@@ -522,6 +545,8 @@ if __name__ == '__main__':
     print(f'Servo Backend: {SERVO_BACKEND_URL}')
     print(f'Ollama Timeout: {OLLAMA_TIMEOUT}s (increased for tablet)')
     print(f'Ollama: {"✅ Available (' + str(OLLAMA_MODEL_LOADED) + ')" if OLLAMA_AVAILABLE else "⚠️  Not available (rule-based mode)"}')
+    if AVAILABLE_MODELS:
+        print(f'Available Models: {", ".join(AVAILABLE_MODELS)}')
     print()
     print('Starting server...')
     print(f'Listening on http://{GENESIS_HOST}:{GENESIS_PORT}')
