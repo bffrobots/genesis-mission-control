@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20+%20WSL-lightgrey)]()
-[![ARC Version](https://img.shields.io/badge/ARC-v4.2.1-orange)](https://synthiam.com)
+[![ARC Version](https://img.shields.io/badge/ARC-v4.2.1-orange)](https://synthiam.com?r=15c7e8c1)
 
 ## Quick Start
 
@@ -26,11 +26,10 @@ ollama pull llama3.1
 ### 2. Configure ARC
 
 1. Open **Synthiam ARC**
-2. Add skills:
-   - **HTTP Server Custom** (port 8080)
-   - **Camera Device** (USB camera)
-   - **Live Stream Broadcast** (port 8097)
-   - **Auto Position** (servo control)
+2. Add **Genesis_Mission_Control App**:
+   - Go to: https://synthiam.com/Community/Apps/Genesis_Mission_Control-23372
+   - Click "Download App"
+   - Open in ARC (double-click the .ezb file)
 3. Copy web interface:
    ```bash
    cp web/index.html "/mnt/c/Users/YOUR_USERNAME/Documents/ARC/HTTP Server Root/index.html"
