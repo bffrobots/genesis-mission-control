@@ -49,7 +49,7 @@ scripts\start_genesis.bat
 
 ### 4. Access Web Interface
 
-Open browser: **http://localhost:8080**
+Open browser: **http://localhost:8080/index.html**
 
 ## Features
 
@@ -228,3 +228,45 @@ Genesis Mission Control supports integration with multiple AI platforms:
 **Note:** The ARC App handles all ARC-side configuration automatically. You only need to run the Python backends and deploy the web interface.
 
 ---
+
+## Installation
+
+### Windows (Servo Backend)
+
+1. **Install Python Dependencies:**
+   ```cmd
+   cd genesis-mission-control
+   pip install -r requirements.txt
+   ```
+   
+   Or double-click: `INSTALL_PYTHON_DEPS.bat`
+
+2. **Start Backend:**
+   ```cmd
+   scripts\start_genesis.bat
+   ```
+
+### WSL (Voice & Chat)
+
+1. **Install Python Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Start Backend:**
+   ```bash
+   ./scripts/start_genesis.sh
+   ```
+
+### Required Packages
+
+- `flask` - Web server (servo backend)
+- `fastapi` - API framework (voice chat)
+- `uvicorn` - ASGI server
+- `requests` - HTTP client
+- `websockets` - WebSocket support
+
+Install all with:
+```bash
+pip install -r requirements.txt
+```
