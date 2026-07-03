@@ -4,6 +4,7 @@ Genesis Mission Control - Voice & Chat Server
 AI-powered conversation with Ollama + Whisper STT + TTS
 
 Runs on Windows OR WSL - auto-detects platform
+Integrates with ARC (8080) and Servo Backend (5000)
 """
 
 import os
@@ -46,9 +47,15 @@ OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.1')
 ROBOT_NAME = os.environ.get('ROBOT_NAME', 'Genesis')
 ROBOT_ID = os.environ.get('ROBOT_ID', 'mini-bff-genesis')
 
+# Integration URLs
+ARC_HTTP_URL = os.environ.get('ARC_HTTP_URL', 'http://localhost:8080')
+SERVO_BACKEND_URL = os.environ.get('SERVO_BACKEND_URL', 'http://localhost:5000')
+
 print(f"🤖 Robot: {ROBOT_NAME} ({ROBOT_ID})")
 print(f"🧠 Ollama Model: {OLLAMA_MODEL}")
 print(f"🌐 Ollama URL: {OLLAMA_URL}")
+print(f"🔗 ARC HTTP URL: {ARC_HTTP_URL}")
+print(f"🔗 Servo Backend URL: {SERVO_BACKEND_URL}")
 
 # ═══════════════════════════════════════════════════════════
 # FASTAPI APP
@@ -77,6 +84,67 @@ class ChatResponse(BaseModel):
     response: str
     intent: Optional[str] = None
     action: Optional[Dict[str, Any]] = None
+
+# ═══════════════════════════════════════════════════════════
+# INTEGRATION HELPERS
+# ═══════════════════════════════════════════════════════════
+
+def send_to_arc(variable_name: str, value: str) -> bool:
+    """Send variable to ARC via HTTP Server"""
+    try:
+        url = f"{ARC_HTTP_URL}/set.html"
+        params = {'var': variable_name, 'val': value}
+        response = requests.get(url, params=params, timeout=5)
+        
+        if response.status_code == 200:
+            print(f"✅ Sent to ARC: {variable_name} = {value}")
+            return True
+        else:
+            print(f"❌ ARC error: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ ARC connection error: {e}")
+        return False
+
+def send_to_servo_backend(servo_id: int, position: int) -> bool:
+    """Send servo command to backend"""
+    try:
+        url = f"{SERVO_BACKEND_URL}/api/servo"
+        data = {'servo_id': servo_id, 'position': position}
+        response = requests.post(url, json=data, timeout=5)
+        
+        if response.status_code == 200:
+            print(f"✅ Servo D{servo_id} -> {position}°")
+            return True
+        else:
+            print(f"❌ Servo backend error: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Servo backend connection error: {e}")
+        return False
+
+def execute_action(action: Dict[str, Any]) -> bool:
+    """Execute robot action via ARC or servo backend"""
+    action_type = action.get('type', '')
+    
+    if action_type == 'execute_action':
+        # Send to ARC via variable
+        action_name = action.get('action', '')
+        return send_to_arc('$Genesis_Action', json.dumps(action))
+    
+    elif action_type == 'servo_move':
+        # Send to servo backend
+        servo_id = action.get('servo_id', 0)
+        position = action.get('position', 90)
+        return send_to_servo_backend(servo_id, position)
+    
+    elif action_type == 'navigate':
+        # Send navigation command to ARC
+        return send_to_arc('$Genesis_Navigation', json.dumps(action))
+    
+    else:
+        print(f"⚠️  Unknown action type: {action_type}")
+        return False
 
 # ═══════════════════════════════════════════════════════════
 # GENESIS AI CORE
@@ -121,6 +189,23 @@ class GenesisAI:
                         'response': f"Navigating to {loc}",
                         'intent': 'navigate'
                     }
+        
+        # Check for servo control
+        if 'move' in text_lower and 'servo' in text_lower:
+            # Extract servo ID and position from text
+            # Example: "move servo 0 to 90 degrees"
+            import re
+            servo_match = re.search(r'servo\s*(\d+)', text_lower)
+            pos_match = re.search(r'(\d+)\s*degrees?', text_lower)
+            
+            if servo_match and pos_match:
+                servo_id = int(servo_match.group(1))
+                position = int(pos_match.group(1))
+                return {
+                    'action': {'type': 'servo_move', 'servo_id': servo_id, 'position': position},
+                    'response': f"Moving servo D{servo_id} to {position}°",
+                    'intent': 'servo_control'
+                }
         
         # Check for questions
         if any(word in text_lower for word in ['what', 'who', 'when', 'where', 'why', 'how']):
@@ -168,11 +253,21 @@ class GenesisAI:
         
         # If it's a robot command, execute immediately
         if command_result['action']:
-            return ChatResponse(
-                response=command_result['response'],
-                intent=command_result['intent'],
-                action=command_result['action']
-            )
+            # Execute the action
+            action_executed = execute_action(command_result['action'])
+            
+            if action_executed:
+                return ChatResponse(
+                    response=command_result['response'],
+                    intent=command_result['intent'],
+                    action=command_result['action']
+                )
+            else:
+                return ChatResponse(
+                    response=f"Failed to execute {command_result['intent']}. Check connections.",
+                    intent=command_result['intent'],
+                    action=None
+                )
         
         # Otherwise, use LLM for conversation
         llm_response = await self.ollama_chat(message)
@@ -196,15 +291,35 @@ def root():
     return {
         'service': 'Genesis Voice & Chat',
         'version': '1.0.0',
-        'robot': ROBOT_NAME
+        'robot': ROBOT_NAME,
+        'arc_url': ARC_HTTP_URL,
+        'servo_backend_url': SERVO_BACKEND_URL
     }
 
 @app.get('/status')
 def get_status():
     """Health check endpoint"""
+    # Check ARC connection
+    arc_available = False
+    try:
+        response = requests.get(ARC_HTTP_URL, timeout=2)
+        if response.status_code == 200:
+            arc_available = True
+    except:
+        pass
+    
+    # Check servo backend connection
+    servo_available = False
+    try:
+        response = requests.get(f"{SERVO_BACKEND_URL}/status", timeout=2)
+        if response.status_code == 200:
+            servo_available = True
+    except:
+        pass
+    
+    # Check Ollama
     ollama_available = False
     ollama_model = None
-    
     try:
         response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         if response.status_code == 200:
@@ -218,10 +333,20 @@ def get_status():
         'status': 'ok',
         'robot': ROBOT_ID,
         'robot_name': ROBOT_NAME,
-        'ollama': {
-            'available': ollama_available,
-            'url': OLLAMA_URL,
-            'model': ollama_model
+        'connections': {
+            'arc': {
+                'available': arc_available,
+                'url': ARC_HTTP_URL
+            },
+            'servo_backend': {
+                'available': servo_available,
+                'url': SERVO_BACKEND_URL
+            },
+            'ollama': {
+                'available': ollama_available,
+                'url': OLLAMA_URL,
+                'model': ollama_model
+            }
         },
         'port': GENESIS_PORT,
         'timestamp': datetime.now().isoformat()
@@ -257,24 +382,18 @@ async def send_command(message: ChatMessage):
         result = await genesis_ai.process_message(message.message)
         
         if result.action:
-            # Send to ARC via HTTP Server
-            arc_url = "http://localhost:8080/set.html"
-            params = {
-                'var': '$Genesis_Command',
-                'val': json.dumps(result.action)
+            # Action already executed in process_message
+            return {
+                'success': result.action is not None,
+                'response': result.response,
+                'action': result.action
             }
-            
-            try:
-                requests.get(arc_url, params=params, timeout=5)
-                print(f"✅ Command sent to ARC: {result.action}")
-            except Exception as e:
-                print(f"⚠️  Failed to send to ARC: {e}")
-        
-        return {
-            'success': True,
-            'response': result.response,
-            'action': result.action
-        }
+        else:
+            return {
+                'success': False,
+                'response': 'No action to execute',
+                'action': None
+            }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -297,7 +416,7 @@ async def websocket_chat(websocket: WebSocket):
             await websocket.send_json({
                 'response': result.response,
                 'intent': result.intent,
-                'action': result.action.dict() if result.action else None
+                'action': result.action if result.action else None
             })
             
     except WebSocketDisconnect:
@@ -318,6 +437,34 @@ def list_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post('/test-connections')
+def test_connections():
+    """Test all connections (ARC, servo backend, Ollama)"""
+    results = {}
+    
+    # Test ARC
+    try:
+        response = requests.get(ARC_HTTP_URL, timeout=5)
+        results['arc'] = {'status': 'ok', 'code': response.status_code}
+    except Exception as e:
+        results['arc'] = {'status': 'error', 'message': str(e)}
+    
+    # Test servo backend
+    try:
+        response = requests.get(f"{SERVO_BACKEND_URL}/status", timeout=5)
+        results['servo_backend'] = {'status': 'ok', 'code': response.status_code}
+    except Exception as e:
+        results['servo_backend'] = {'status': 'error', 'message': str(e)}
+    
+    # Test Ollama
+    try:
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        results['ollama'] = {'status': 'ok', 'code': response.status_code}
+    except Exception as e:
+        results['ollama'] = {'status': 'error', 'message': str(e)}
+    
+    return results
+
 # ═══════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════
@@ -329,17 +476,20 @@ if __name__ == '__main__':
     print(f'Platform: {sys.platform}')
     print(f'Robot: {ROBOT_NAME} ({ROBOT_ID})')
     print(f'Ollama: {OLLAMA_URL} ({OLLAMA_MODEL})')
+    print(f'ARC HTTP: {ARC_HTTP_URL}')
+    print(f'Servo Backend: {SERVO_BACKEND_URL}')
     print()
     print('Starting server...')
     print(f'Listening on http://{GENESIS_HOST}:{GENESIS_PORT}')
     print()
     print('Endpoints:')
     print(f'  GET  /              - Root endpoint')
-    print(f'  GET  /status        - Health check')
+    print(f'  GET  /status        - Health check (tests all connections)')
     print(f'  POST /chat          - Chat with AI')
     print(f'  POST /command       - Send robot command')
     print(f'  WS   /ws/chat       - WebSocket chat')
     print(f'  GET  /models        - List Ollama models')
+    print(f'  POST /test-connections - Test all connections')
     print()
     print('Press Ctrl+C to stop')
     print('=' * 60)
