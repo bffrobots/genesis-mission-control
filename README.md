@@ -51,6 +51,13 @@ scripts\start_genesis.bat
 
 Open browser: **http://localhost:8080/index.html**
 
+### 5. Start Voice & Chat Service (Windows)
+
+**Start Voice & Chat:**
+```cmd
+scripts\start_voice_chat.bat
+```
+
 ## Features
 
 - 🎯 **18 DOF Motion Control** - Precise servo control via web interface
@@ -223,7 +230,7 @@ Genesis Mission Control supports integration with multiple AI platforms:
    ./scripts/start_genesis.sh
    ```
 
-5. **Access:** http://localhost:8080
+5. **Access:** http://localhost:8080/index.html
 
 **Note:** The ARC App handles all ARC-side configuration automatically. You only need to run the Python backends and deploy the web interface.
 
@@ -270,3 +277,78 @@ Install all with:
 ```bash
 pip install -r requirements.txt
 ```
+
+## Windows-Native Setup (No WSL Required)
+
+You can run Genesis Mission Control entirely on Windows without WSL!
+
+### Prerequisites
+
+1. **Python 3.11+** - https://python.org
+2. **Ollama for Windows** - https://ollama.com/download
+
+### Quick Setup (Windows Only)
+
+1. **Install Ollama:**
+   - Download: https://ollama.com/download
+   - Run installer
+   - Ollama runs in system tray
+
+2. **Pull llama3.1 model:**
+   ```cmd
+   ollama pull llama3.1
+   ```
+
+3. **Install Python dependencies:**
+   ```cmd
+   pip install -r requirements.txt
+   ```
+   
+   Or double-click: `INSTALL_PYTHON_DEPS.bat`
+
+4. **Start Servo Backend:**
+   ```cmd
+   scripts\start_genesis.bat
+   ```
+
+5. **Start Voice & Chat:**
+   ```cmd
+   scripts\start_voice_chat.bat
+   ```
+
+6. **Access Web Interface:** http://localhost:8080/index.html
+
+### Helper Scripts
+
+| Script | Description |
+|--------|-------------|
+| `INSTALL_OLLAMA_WINDOWS.bat` | Install Ollama on Windows |
+| `INSTALL_PYTHON_DEPS.bat` | Install Python dependencies |
+| `start_genesis.bat` | Start servo backend |
+| `start_voice_chat.bat` | Start voice & chat server |
+
+### Troubleshooting
+
+**Ollama not running:**
+```cmd
+# Start Ollama manually
+ollama serve
+
+# Or open Ollama from Start Menu
+```
+
+**Model not found:**
+```cmd
+ollama pull llama3.1
+```
+
+**Port already in use:**
+```cmd
+# Check what's using port 5001
+netstat -ano | findstr :5001
+
+# Kill the process
+taskkill /PID <PID> /F
+```
+
+---
