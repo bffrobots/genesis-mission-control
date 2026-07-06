@@ -14,15 +14,15 @@
 
 ## Step 1: Install Dependencies (2 minutes)
 
-**Option A: Double-click**
+**Double-click:**
 ```
-src/windows/install-dependencies.bat
+scripts/install-dependencies.bat
 ```
 
-**Option B: Command line**
+**Or command line:**
 ```cmd
-cd src/windows
-pip install fastapi uvicorn websockets requests anthropic openai
+cd scripts
+pip install -r ../requirements.txt
 ```
 
 ✅ **Done!** Dependencies installed.
@@ -31,7 +31,7 @@ pip install fastapi uvicorn websockets requests anthropic openai
 
 ## Step 2: (Optional) Enable AI Conversations (30 seconds)
 
-**Skip this step if you only need robot commands** (commands work WITHOUT AI!)
+**Skip this step if you only need robot commands** (commands work WITHOUT this!)
 
 ### Get API Key
 
@@ -58,47 +58,54 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 
 ---
 
-## Step 3: Start Server (10 seconds)
+## Step 3: Start Services (10 seconds)
 
-**Option A: Double-click**
+### Option A: Start Everything (Recommended)
+
+**Double-click:**
 ```
-src/windows/start.bat
+scripts/start-all.bat
 ```
 
-**Option B: Command line**
+This opens **two windows**:
+- Window 1: **Motion Control** (Port 5000) - Servo control
+- Window 2: **Voice & Chat** (Port 5001) - AI and commands
+
+### Option B: Start Individually
+
+**Terminal 1 - Motion Control:**
 ```cmd
-cd src/windows
-python voice-chat-server-v2.py
+cd scripts
+start-genesis.bat
 ```
 
-✅ **Done!** Server running on http://localhost:5001
+**Terminal 2 - Voice & Chat:**
+```cmd
+cd scripts
+start.bat
+```
+
+✅ **Done!** Both services running.
 
 ---
 
 ## Step 4: Test It! (30 seconds)
 
-### Test 1: Health Check
+### Test 1: Health Checks
 
-**Browser:** http://localhost:5001/status
+**Motion Control (Port 5000):**
+```cmd
+curl http://localhost:5000/status
+```
 
-**Or Command Prompt:**
+**Voice & Chat (Port 5001):**
 ```cmd
 curl http://localhost:5001/status
 ```
 
-**Expected:**
-```json
-{
-  "status": "ok",
-  "robot": "Genesis",
-  "ai": {
-    "provider": "anthropic",
-    "available": true
-  }
-}
-```
+**Expected:** Both return `{"status": "ok", ...}`
 
-### Test 2: Commands (<1ms!)
+### Test 2: Voice Commands (<1ms!)
 
 **Command Prompt:**
 ```cmd
@@ -115,7 +122,7 @@ curl -X POST http://localhost:5001/chat -H "Content-Type: application/json" -d "
 }
 ```
 
-### Test 3: Conversation (1-2s with AI)
+### Test 3: AI Conversation (1-2s with API key)
 
 **Command Prompt:**
 ```cmd
@@ -137,22 +144,30 @@ curl -X POST http://localhost:5001/chat -H "Content-Type: application/json" -d "
 
 ## Step 5: Use with Web Interface
 
+### Deploy Web Interface (One Time)
+
+```cmd
+copy web\interface-index.html "%USERPROFILE%\Documents\ARC\HTTP Server Root\index.html"
+```
+
 ### Open Web Interface
 
-**Browser:** http://localhost:8080 (ARC HTTP Server)
-
-Or use the included web interface:
-```
-web/interface-index.html
-```
+**Browser:** http://localhost:8080
 
 ### Test Voice & Chat
 
-1. Go to Voice & Chat tab
+1. Go to **Voice & Chat** tab
 2. Type: "stand up"
 3. Press Enter
 4. Verify response in <1ms
 5. Robot should execute command (if ARC connected)
+
+### Test Motion Control
+
+1. Go to **Motion Control** tab
+2. Move a servo slider
+3. Verify robot servo moves
+4. Try "Reset All" button
 
 ✅ **Working!**
 
@@ -169,6 +184,7 @@ web/interface-index.html
 | "bow" | Bows | <1ms ⚡ |
 | "stop" | Stops all motion | <1ms ⚡ |
 | "move servo D0 to 90" | Moves servo | <1ms ⚡ |
+| "What can you do?" | AI responds | 1-2s 🤖 |
 
 ---
 
@@ -182,6 +198,21 @@ web/interface-index.html
 3. Restart Command Prompt
 4. Run: `python --version` to verify
 
+### Problem: "Port 5000 already in use"
+
+**Solution:**
+```cmd
+REM Find what's using port 5000
+netstat -ano | findstr :5000
+
+REM Kill the process (replace PID with actual number)
+taskkill /F /PID <PID>
+
+REM Restart
+cd scripts
+start-genesis.bat
+```
+
 ### Problem: "Port 5001 already in use"
 
 **Solution:**
@@ -189,16 +220,18 @@ web/interface-index.html
 REM Find what's using port 5001
 netstat -ano | findstr :5001
 
-REM Kill the process (replace PID with actual number)
-taskkill /PID <PID> /F
+REM Kill the process
+taskkill /F /PID <PID>
 
-REM Restart server
+REM Restart
+cd scripts
+start.bat
 ```
 
 ### Problem: "Dependencies not installed"
 
 **Solution:**
-1. Right-click `install-dependencies.bat`
+1. Right-click `scripts/install-dependencies.bat`
 2. Select **"Run as administrator"**
 3. Wait for installation to complete
 
@@ -209,7 +242,7 @@ REM Restart server
 2. Add **HTTP Server Custom** skill
 3. Configure port 8080
 4. Enable the skill
-5. Restart voice chat server
+5. Restart services
 
 ### Problem: Commands work but robot doesn't move
 
@@ -218,6 +251,15 @@ REM Restart server
 2. HTTP Server Custom skill is enabled (port 8080)
 3. Auto Position skill is active
 4. Variable `$Genesis_Command` is being set (use Variable Watch skill)
+5. Servo files exist: `dir "%USERPROFILE%\Documents\ARC\HTTP Server Root\Servo_D*.txt"`
+
+### Problem: AI not working
+
+**Check:**
+1. API key is set: `echo %ANTHROPIC_API_KEY%`
+2. Internet connection is working
+3. API key has quota remaining
+4. Commands still work <1ms even without AI (rule-based mode)
 
 ---
 
@@ -229,15 +271,16 @@ REM Restart server
 
 **Now:**
 1. Configure ARC integration (see README.md)
-2. Deploy web interface to ARC HTTP Server
-3. Test with your robot!
+2. Test all motion control features
+3. Try voice commands
+4. Explore web interface features
 
 ---
 
 ## Need Help?
 
-- **Full Documentation:** See `README.md`
-- **Troubleshooting:** See `docs/TROUBLESHOOTING.md`
+- **Full Documentation:** See [README.md](../README.md)
+- **Troubleshooting:** See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - **Run Diagnostics:** `scripts/diagnose.sh`
 - **Open Issue:** GitHub Issues
 
